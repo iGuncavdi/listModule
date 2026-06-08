@@ -1,23 +1,32 @@
+Module IList.
 Require Import Arith.
 From Equations Require Import Equations.
 Import EqNotations.
 Require Import Lia.
+Require Import Program.Equality.
+Require Import Bool.
+Require Import List.
+Import ListNotations.
+
 Inductive ilist : nat -> Type :=
 | Nil : ilist 0
 | Cons : forall (n: nat), nat -> ilist n -> ilist (S n).
 
+Inductive perm : list nat -> list nat -> Prop :=
+| perm_nil : perm nil nil
+| perm_skip : forall x l1 l2, perm l1 l2 -> perm (x :: l1) (x :: l2)
+| perm_swap : forall x y l, perm (x :: y :: l) (y :: x :: l)
+| perm_trans : forall l1 l2 l3, perm l1 l2 -> perm l2 l3 -> perm l1 l3.
 Arguments Cons {n} _ _.
 
 Definition length (n : nat) (ls : ilist n) : nat := n.
 
 Equations hd (n : nat) (ls : ilist (S n)) : nat :=
 hd _ (Cons h _) := h.
-Print hd.
-Definition l4 := Cons 1 (Cons 2 (Cons 3 Nil)).
+
 
 Eval compute in (hd 1 (Cons 1 (Cons 2 Nil))).
-Compute (hd 2 l4).
-Eval compute in (hd 2 l4).
+
 
 Equations tl (n : nat) (ls : ilist (S n)) : ilist n :=
 tl _ (Cons _ t) := t.
@@ -50,11 +59,11 @@ filter _ f (Cons h tl) with f h := {
 |false => filter _ f tl
 }.
 
-Equations fold_right (n: nat) (f: nat -> nat -> nat) (b: nat) (l: ilist n) : nat :=
+Equations fold_right {B : Type} (n: nat) (f: nat -> B -> B) (b: B) (l: ilist n) : B :=
 fold_right _ _ a Nil := a;
 fold_right _ f a (Cons h tl) := f h (fold_right _ f a tl). 
 
-Equations fold_left (n: nat) (f: nat -> nat -> nat) (b: nat) (l :ilist n) : nat :=
+Equations fold_left {B : Type} (n: nat) (f: B -> nat -> B) (b: B) (l :ilist n) : B :=
 fold_left _ _ a Nil := a;
 fold_left _ f a (Cons h tl) := fold_left _ f (f a h) tl.
 
@@ -137,7 +146,7 @@ reflexivity.
 
 Modelisation des vecteurs en coq
 *)
-Require Import Program.Equality.
+
 Lemma app_nil2 : forall (n : nat) (l : ilist n),
   rew [ilist] (Nat.add_0_r n) in (app n l 0 Nil) = l.
 Proof.
@@ -149,10 +158,12 @@ reflexivity.
 simp app.
 rewrite <- IHl.
 simpl_eq.
+
+(*
 rewrite app_nil.
 rewrite(Nat.add_0_r n).
 simp app.
-
+*)
 
 
 Admitted.
@@ -303,11 +314,11 @@ simp unject.
 rewrite <- H.
 reflexivity.
 Qed.
-Require Import Bool.
+
 
 
 Lemma unject_app : forall (n1 n2 : nat) (l1 : ilist n1) (l2 : ilist n2),
-  unject _ (app _ l1 _ l2) = (unject _ l1 ++ unject _ l2)%list.
+  unject _ (app _ l1 _ l2) = (unject _ l1 ++ unject _ l2).
 Proof.
 intros.
 funelim (app n1 l1 n2 l2).
@@ -324,7 +335,7 @@ simp unject.
 reflexivity.
 Qed.
 Lemma isnoc_unject : forall (n : nat) (l : ilist n) (e : nat),
-  unject _ (isnoc n l e) = (unject _ l ++ (e :: nil))%list.
+  unject _ (isnoc n l e) = (unject _ l ++ (e :: nil)).
 Proof.
 intros.
 funelim (isnoc n l e).
@@ -355,18 +366,19 @@ rewrite H.
 reflexivity.
 Qed.
 Lemma unject_length : forall (n : nat) (l : ilist n),
-  List.length (unject n l) = n.
+  length' (unject n l) = n.
 Proof.
 intros.
 funelim (unject n l).
 reflexivity.
 simp unject.
 simpl.
+rewrite length'_equation_2.
 rewrite H.
 reflexivity.
 Qed.
 Lemma insert_unject : forall (n : nat) (e : nat) (l : ilist n),
-  List.length (unject _ (insert n e l)) = S n.
+  length' (unject _ (insert n e l)) = S n.
 Proof.
 intros.
 induction l.
@@ -380,19 +392,21 @@ destruct (Nat.leb e n0) eqn:Heq.
 
 simpl.
 simp unject.
-simpl.
+rewrite length'_equation_2.
+
+simp length'.
 rewrite unject_length.
 reflexivity.
 simpl.
 simp unject.
-simpl.
+simp length'.
 rewrite unject_length.
 reflexivity.
 Qed.
 
 Lemma rev_isnoc : forall (n : nat) (l : ilist n) (e : nat),
   unject _ (rev _ (isnoc n l e)) = 
-  (e :: unject _ (rev n l))%list.
+  (e :: unject _ (rev n l)).
 Proof.
 intros.
 funelim (isnoc n l e).
@@ -522,20 +536,21 @@ reflexivity.
 Qed.
 
 Lemma filter_length : forall (n : nat) (f : nat -> bool) (l : ilist n),
-  List.length (filter n f l) <= n.
+  length' (filter n f l) <= n.
 Proof.
 intros.
 funelim (filter n f l).
 reflexivity.
 rewrite <- Heqcall.
-simpl.
+simp length'.
+
 lia.
 rewrite <- Heqcall.
 lia.
 Qed.
 
 Lemma sort_length : forall (n : nat) (l : ilist n),
-  List.length (unject _ (sort n l)) = n.
+  length' (unject _ (sort n l)) = n.
 Proof.
 intros.
 funelim (sort n l).
@@ -608,9 +623,10 @@ split.
 destruct (f h) eqn:Heq.
 reflexivity.
 simp filter in H.
-assert (Hlen : List.length (filter n0 f tl0) <= n0) by apply filter_length.
+assert (Hlen : length' (filter n0 f tl0) <= n0) by apply filter_length.
 rewrite H in Hlen.
-simpl in Hlen.
+
+simp length' in Hlen.
 rewrite unject_length in Hlen.
 lia.
 destruct (f h) eqn:Heq.
@@ -620,9 +636,189 @@ intro Htl.
 apply H4.
 apply Htl.
 simpl in H.
-assert (Hlen : List.length (filter n0 f tl0) <= n0) by apply filter_length.
+assert (Hlen : length' (filter n0 f tl0) <= n0) by apply filter_length.
 rewrite H in Hlen.
-simpl in Hlen.
+rewrite length'_equation_2 in Hlen.
+
 rewrite unject_length in Hlen.
 lia.
 Qed.
+Check List.filter.
+Lemma filter_filter : forall (n : nat) (f : nat -> bool) (l : ilist n),
+  List.filter f (filter n f l) = filter n f l.
+Proof.
+intros.
+funelim (filter n f l).
+reflexivity.
+simp filter.
+rewrite Heq.
+simpl.
+rewrite H.
+rewrite Heq.
+reflexivity.
+simp filter.
+rewrite Heq.
+simpl.
+rewrite H.
+reflexivity.
+Qed.
+
+Lemma filter_app : forall (n1 n2 : nat) (f : nat -> bool) (l1 : ilist n1) (l2 : ilist n2),
+filter _ f (app _ l1 _ l2) = (filter _ f l1 ++ filter _ f l2).
+Proof.
+intros.
+induction l1.
+simpl.
+simp filter.
+simpl.
+simp app.
+reflexivity.
+
+simp app.
+
+destruct (f n0) eqn:Heq.
+simp filter.
+rewrite Heq.
+simpl.
+rewrite <- IHl1.
+
+simp filter.
+rewrite Heq.
+simpl.
+reflexivity.
+
+simp filter.
+rewrite Heq.
+simpl.
+rewrite <- IHl1.
+
+simp filter.
+rewrite Heq.
+simpl.
+reflexivity.
+Qed.
+Print app.
+Print fold_left.
+
+Check fold_left_equation_2.
+
+Lemma fold_left_app : forall {B : Type} (n1 n2 : nat) (f : B -> nat -> B) (b : B) (l1 : ilist n1) (l2 : ilist n2),
+  fold_left _ f b (app _ l1 _ l2) = 
+  fold_left _ f (fold_left _ f b l1) l2.
+Proof.
+  intros B n1 n2 f b l1.
+  revert b.
+  induction l1.
+  intros b l2.
+  simp app.
+  simp fold_left.
+  reflexivity.
+  intros b l2.
+  simp app.
+  simp fold_left.
+  simpl.
+  rewrite fold_left_equation_2.
+  apply IHl1.
+
+Qed.
+Check fold_right_equation_2.
+Lemma fold_right_app : forall {B : Type} (n1 n2 : nat) (f : nat -> B -> B) (b : B) (l1 : ilist n1) (l2 : ilist n2),
+  fold_right _ f b (app _ l1 _ l2) = 
+  fold_right _ f (fold_right _ f b l2) l1.
+Proof.
+intros B n1 n2 f b l1.
+revert b.
+induction l1.
+intros b l2.
+simp app.
+simp fold_right.
+simpl.
+reflexivity.
+intros b l2.
+simpl.
+simp app.
+simp fold_right.
+rewrite <- fold_right_equation_2.
+rewrite <- IHl1.
+simp fold_right.
+reflexivity.
+Qed.
+Lemma perm_refl : forall (l : list nat), perm l l.
+Proof.
+  induction l.
+  apply perm_nil.
+  apply perm_skip. exact IHl.
+Qed.
+
+Lemma insert_permutation : forall (n : nat) (e : nat) (l : ilist n),
+  perm (unject _ (insert n e l)) (e :: unject _ l).
+Proof.
+intros.
+funelim (insert n e l).
+simp insert.
+simp unject.
+apply perm_skip.
+apply perm_nil.
+simp insert.
+rewrite Heq.
+simpl.
+simp unject.
+apply perm_refl.
+simp insert.
+rewrite Heq.
+simpl.
+simp unject.
+apply perm_trans with (l2 := h :: e :: unject _ tl0).
+apply perm_skip.
+apply H.
+apply perm_swap.
+Qed.
+
+Lemma sort_permutation : forall (n : nat) (l : ilist n),
+  perm (unject _ (sort n l)) (unject _ l).
+Proof.
+intros.
+funelim (sort n l).
+simp unject.
+simp sort.
+simp unject.
+apply perm_refl.
+apply perm_trans with (l2 := h :: unject n0  (sort n0 tl0) ).
+simp sort.
+apply insert_permutation.
+simp unject.
+apply perm_skip.
+apply H.
+Qed.
+
+
+Check length'_equation_2.
+Lemma unject_inject : forall (l : list nat),
+  unject _ (inject l) = l.
+Proof.
+intro.
+funelim (inject l).
+
+reflexivity.
+simpl.
+simp inject.
+simp unject.
+simp length'.
+
+cbn [length'].
+simp unject.
+rewrite H.
+reflexivity.
+Qed.
+Lemma inject_unject : forall (n : nat) (l : ilist n),
+    unject _ (inject (unject n l)) = unject n l.
+Proof.
+intros.
+funelim (unject n l).
+simp unject.
+reflexivity.
+rewrite unject_inject.
+reflexivity.
+Qed.
+
+End IList.
