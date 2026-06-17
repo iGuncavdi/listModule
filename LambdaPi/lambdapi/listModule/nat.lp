@@ -11,3 +11,4 @@ notation + infix left 6;
 
 rule zero + $y ↪ $y;
 rule succ $x + $y ↪ succ ($x + $y);
+rule $x + zero ↪ $x;
